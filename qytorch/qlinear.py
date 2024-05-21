@@ -35,10 +35,11 @@ class QLinear(nn.Module):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.r_weight = nn.Parameter(torch.empty((out_features//4, in_features//4), **factory_kwargs))
-        self.i_weight = nn.Parameter(torch.empty((out_features//4, in_features//4), **factory_kwargs))
-        self.j_weight = nn.Parameter(torch.empty((out_features//4, in_features//4), **factory_kwargs))
-        self.k_weight = nn.Parameter(torch.empty((out_features//4, in_features//4), **factory_kwargs))
+        a, b = out_features//4, in_features//4
+        self.r_weight = nn.Parameter(torch.empty((a, b), **factory_kwargs))
+        self.i_weight = nn.Parameter(torch.empty((a, b), **factory_kwargs))
+        self.j_weight = nn.Parameter(torch.empty((a, b), **factory_kwargs))
+        self.k_weight = nn.Parameter(torch.empty((a, b), **factory_kwargs))
         if bias:
             self.bias = nn.Parameter(torch.empty(out_features, **factory_kwargs))
         else:
@@ -57,18 +58,24 @@ class QLinear(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        weight = _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
+        weight = self.get_weight()
         return F.linear(x, weight, self.bias)
 
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
 
+    def get_weight(self):
+        return _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
 
 if __name__ == '__main__':
-    # model = nn.Linear(20, 16)
-    model = QLinear(20, 16)  # 20 and 16 are divisible by 4
-    x = torch.randn(128, 20)
-    output = model(x)
-    print(output.size())
-    # print(f"{model.weight.size() = }")
-    print(f"{model.r_weight.size() = },\n{model.i_weight.size() = },\n{model.j_weight.size() = },\n{model.k_weight.size() = }")
+    rmodel = nn.Linear(20, 16)
+    qmodel = QLinear(20, 16)
+    input_ = torch.randn(128, 20)
+    routput = rmodel(input_)
+    qoutput = qmodel(input_)
+    print(f"{rmodel.weight.size() = }")
+    print(f"{qmodel.r_weight.size() = }")
+    print(f"{qmodel.i_weight.size() = }")
+    print(f"{qmodel.j_weight.size() = }")
+    print(f"{qmodel.k_weight.size() = }")
+    print(f"{input_.size() = }\n{routput.size() = }\n{qoutput.size() = }")

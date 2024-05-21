@@ -16,6 +16,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'torch',
+        'numpy',
         # 
     ],
     keywords=['quaternion', 'neural networks', 'torch', 'machine learning', 'parameter reduction'],

@@ -1,23 +1,22 @@
 import math
-import warnings
-
 import torch
-from torch import Tensor
-from torch.nn.parameter import Parameter, UninitializedParameter
-from torch.nn import functional as F
-from torch.nn import init
 import torch.nn as nn
-# from .lazy import LazyModuleMixin
-# from .module import Module
-from torch.nn.modules.utils import _single, _pair, _triple, _reverse_repeat_tuple
-# from torch._torch_docs import reproducibility_notes
+import torch.nn.functional as F
+
+from typing import Optional, Union, List, Tuple
+
+from torch import Tensor
+from torch.nn.parameter import Parameter
+from torch.nn import init
 
 from torch.nn.common_types import _size_1_t, _size_2_t, _size_3_t
-from typing import Optional, List, Tuple, Union
+from torch.nn.modules.utils import _single, _pair, _triple, _reverse_repeat_tuple
 
 from quat_base import _construct_matrix
 
-nn.Conv2d
+
+
+
 
 class _QConvNd(nn.Module):
 
@@ -40,10 +39,7 @@ class _QConvNd(nn.Module):
     output_padding: Tuple[int, ...]
     groups: int
     padding_mode: str
-    r_weight: Tensor
-    i_weight: Tensor
-    j_weight: Tensor
-    k_weight: Tensor
+    weight: Tensor
     bias: Optional[Tensor]
 
     def __init__(self,
@@ -60,8 +56,6 @@ class _QConvNd(nn.Module):
                  padding_mode: str,
                  device=None,
                  dtype=None) -> None:
-        assert in_channels % 4 == 0 and out_channels % 4 == 0, "in_channels and out_channels must be divisible by 4"
-
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         if groups <= 0:
@@ -91,10 +85,7 @@ class _QConvNd(nn.Module):
         self.output_padding = output_padding
         self.groups = groups
         self.padding_mode = padding_mode
-        # `_reversed_padding_repeated_twice` is the padding to be passed to
-        # `F.pad` if needed (e.g., for non-zero padding types that are
-        # implemented as two ops: padding + conv). `F.pad` accepts paddings in
-        # reverse order than the dimension.
+
         if isinstance(self.padding, str):
             self._reversed_padding_repeated_twice = [0, 0] * len(kernel_size)
             if padding == 'same':
@@ -109,15 +100,21 @@ class _QConvNd(nn.Module):
             self._reversed_padding_repeated_twice = _reverse_repeat_tuple(self.padding, 2)
 
         if transposed:
-            self.r_weight = Parameter(torch.empty((in_channels // 4, out_channels // (groups*4), *kernel_size), **factory_kwargs))
-            self.i_weight = Parameter(torch.empty((in_channels // 4, out_channels // (groups*4), *kernel_size), **factory_kwargs))
-            self.j_weight = Parameter(torch.empty((in_channels // 4, out_channels // (groups*4), *kernel_size), **factory_kwargs))
-            self.k_weight = Parameter(torch.empty((in_channels // 4, out_channels // (groups*4), *kernel_size), **factory_kwargs))
+            # self.weight = Parameter(torch.empty((in_channels, out_channels // groups, *kernel_size), **factory_kwargs))
+            a, b = in_channels, out_channels // groups
+            assert a%4 == 0 and b%4 == 0, f"in_channels={a}, (out_channels//groups)={b} must be divisible by 4"
+            self.r_weight = Parameter(torch.empty((a//4, b//4, *kernel_size), **factory_kwargs))
+            self.i_weight = Parameter(torch.empty((a//4, b//4, *kernel_size), **factory_kwargs))
+            self.j_weight = Parameter(torch.empty((a//4, b//4, *kernel_size), **factory_kwargs))
+            self.k_weight = Parameter(torch.empty((a//4, b//4, *kernel_size), **factory_kwargs))
         else:
-            self.r_weight = Parameter(torch.empty((out_channels // 4, in_channels // (groups*4), *kernel_size), **factory_kwargs))
-            self.i_weight = Parameter(torch.empty((out_channels // 4, in_channels // (groups*4), *kernel_size), **factory_kwargs))
-            self.j_weight = Parameter(torch.empty((out_channels // 4, in_channels // (groups*4), *kernel_size), **factory_kwargs))
-            self.k_weight = Parameter(torch.empty((out_channels // 4, in_channels // (groups*4), *kernel_size), **factory_kwargs))
+            # self.weight = Parameter(torch.empty((out_channels, in_channels // groups, *kernel_size), **factory_kwargs))
+            a, b = out_channels, in_channels // groups
+            assert a%4 == 0 and b%4 == 0, f"out_channels={a}, (in_channels//groups)={b} must be divisible by 4"
+            self.r_weight = Parameter(torch.empty((a//4, b//4, *kernel_size), **factory_kwargs))
+            self.i_weight = Parameter(torch.empty((a//4, b//4, *kernel_size), **factory_kwargs))
+            self.j_weight = Parameter(torch.empty((a//4, b//4, *kernel_size), **factory_kwargs))
+            self.k_weight = Parameter(torch.empty((a//4, b//4, *kernel_size), **factory_kwargs))
         if bias:
             self.bias = Parameter(torch.empty(out_channels, **factory_kwargs))
         else:
@@ -126,12 +123,12 @@ class _QConvNd(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        nn.init.kaiming_uniform_(self.r_weight, a=math.sqrt(5))
-        nn.init.kaiming_uniform_(self.i_weight, a=math.sqrt(5))
-        nn.init.kaiming_uniform_(self.j_weight, a=math.sqrt(5))
-        nn.init.kaiming_uniform_(self.k_weight, a=math.sqrt(5))
+        init.kaiming_uniform_(self.r_weight, a=math.sqrt(5))
+        init.kaiming_uniform_(self.i_weight, a=math.sqrt(5))
+        init.kaiming_uniform_(self.j_weight, a=math.sqrt(5))
+        init.kaiming_uniform_(self.k_weight, a=math.sqrt(5))
         if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(torch.zeros((self.r_weight.size(0)*4, self.r_weight.size(1)*4), dtype=torch.bool))
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.r_weight)
             if fan_in != 0:
                 bound = 1 / math.sqrt(fan_in)
                 init.uniform_(self.bias, -bound, bound)
@@ -159,56 +156,47 @@ class _QConvNd(nn.Module):
             self.padding_mode = 'zeros'
 
 
-# class QConv1d(_QConvNd):
-#     def __init__(
-#         self,
-#         in_channels: int,
-#         out_channels: int,
-#         kernel_size: _size_1_t,
-#         stride: _size_1_t = 1,
-#         padding: Union[str, _size_1_t] = 0,
-#         dilation: _size_1_t = 1,
-#         groups: int = 1,
-#         bias: bool = True,
-#         padding_mode: str = 'zeros',  # TODO: refine this type
-#         device=None,
-#         dtype=None
-#     ) -> None:
-#         factory_kwargs = {'device': device, 'dtype': dtype}
-#         # we create new variables below to make mypy happy since kernel_size has
-#         # type Union[int, Tuple[int]] and kernel_size_ has type Tuple[int]
-#         kernel_size_ = _single(kernel_size)
-#         stride_ = _single(stride)
-#         padding_ = padding if isinstance(padding, str) else _single(padding)
-#         dilation_ = _single(dilation)
-#         super().__init__(
-#             in_channels, out_channels, kernel_size_, stride_, padding_, dilation_,
-#             False, _single(0), groups, bias, padding_mode, **factory_kwargs)
+class QConv1d(_QConvNd):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: _size_1_t,
+        stride: _size_1_t = 1,
+        padding: Union[str, _size_1_t] = 0,
+        dilation: _size_1_t = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = 'zeros',
+        device=None,
+        dtype=None
+    ) -> None:
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        kernel_size_ = _single(kernel_size)
+        stride_ = _single(stride)
+        padding_ = padding if isinstance(padding, str) else _single(padding)
+        dilation_ = _single(dilation)
+        super().__init__(
+            in_channels, out_channels, kernel_size_, stride_, padding_, dilation_,
+            False, _single(0), groups, bias, padding_mode, **factory_kwargs)
 
-#     def _conv_forward(self, input: Tensor, weight: Tensor, bias: Optional[Tensor]):
-#         if self.padding_mode != 'zeros':
-#             return F.conv1d(F.pad(input, self._reversed_padding_repeated_twice, mode=self.padding_mode),
-#                             weight, bias, self.stride,
-#                             _single(0), self.dilation, self.groups)
-#         return F.conv1d(input, weight, bias, self.stride,
-#                         self.padding, self.dilation, self.groups)
+    def _conv_forward(self, input: Tensor, weight: Tensor, bias: Optional[Tensor]):
+        if self.padding_mode != 'zeros':
+            return F.conv1d(F.pad(input, self._reversed_padding_repeated_twice, mode=self.padding_mode),
+                            weight, bias, self.stride,
+                            _single(0), self.dilation, self.groups)
+        return F.conv1d(input, weight, bias, self.stride,
+                        self.padding, self.dilation, self.groups)
 
-#     def forward(self, input: Tensor) -> Tensor:
-#         weight = _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
-#         return self._conv_forward(input, weight, self.bias)
+    def forward(self, input: Tensor) -> Tensor:
+        weight = self.get_weight()
+        return self._conv_forward(input, weight, self.bias)
+
+    def get_weight(self):
+        return _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
 
 
 class QConv2d(_QConvNd):
-    """Quaternion convolution 2d.
-
-    Examples:
-        >>> model = QConv2d(20, 16, kernel_size=3, stride=1, padding=1)  # 20 and 16 are divisible by 4
-        >>> x = torch.randn(128, 20, 32, 32)
-        >>> output = model(x)
-        >>> print(output.size())
-        torch.Size([128, 16, 30, 30])
-    """
-
     def __init__(
         self,
         in_channels: int,
@@ -219,7 +207,7 @@ class QConv2d(_QConvNd):
         dilation: _size_2_t = 1,
         groups: int = 1,
         bias: bool = True,
-        padding_mode: str = 'zeros',  # TODO: refine this type
+        padding_mode: str = 'zeros',
         device=None,
         dtype=None
     ) -> None:
@@ -241,51 +229,97 @@ class QConv2d(_QConvNd):
                         self.padding, self.dilation, self.groups)
 
     def forward(self, input: Tensor) -> Tensor:
-        weight = _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
+        weight = self.get_weight()
         return self._conv_forward(input, weight, self.bias)
 
-# class QConv3d(_QConvNd):
-#     def __init__(
-#         self,
-#         in_channels: int,
-#         out_channels: int,
-#         kernel_size: _size_3_t,
-#         stride: _size_3_t = 1,
-#         padding: Union[str, _size_3_t] = 0,
-#         dilation: _size_3_t = 1,
-#         groups: int = 1,
-#         bias: bool = True,
-#         padding_mode: str = 'zeros',
-#         device=None,
-#         dtype=None
-#     ) -> None:
-#         factory_kwargs = {'device': device, 'dtype': dtype}
-#         kernel_size_ = _triple(kernel_size)
-#         stride_ = _triple(stride)
-#         padding_ = padding if isinstance(padding, str) else _triple(padding)
-#         dilation_ = _triple(dilation)
-#         super().__init__(
-#             in_channels, out_channels, kernel_size_, stride_, padding_, dilation_,
-#             False, _triple(0), groups, bias, padding_mode, **factory_kwargs)
+    def get_weight(self):
+        return _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
 
-#     def _conv_forward(self, input: Tensor, weight: Tensor, bias: Optional[Tensor]):
-#         if self.padding_mode != 'zeros':
-#             return F.conv3d(F.pad(input, self._reversed_padding_repeated_twice, mode=self.padding_mode),
-#                             weight, bias, self.stride,
-#                             _triple(0), self.dilation, self.groups)
-#         return F.conv3d(input, weight, bias, self.stride,
-#                         self.padding, self.dilation, self.groups)
+class QConv3d(_QConvNd):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: _size_3_t,
+        stride: _size_3_t = 1,
+        padding: Union[str, _size_3_t] = 0,
+        dilation: _size_3_t = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = 'zeros',
+        device=None,
+        dtype=None
+    ) -> None:
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        kernel_size_ = _triple(kernel_size)
+        stride_ = _triple(stride)
+        padding_ = padding if isinstance(padding, str) else _triple(padding)
+        dilation_ = _triple(dilation)
+        super().__init__(
+            in_channels, out_channels, kernel_size_, stride_, padding_, dilation_,
+            False, _triple(0), groups, bias, padding_mode, **factory_kwargs)
 
-#     def forward(self, input: Tensor) -> Tensor:
-#         weight = _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
-#         return self._conv_forward(input, weight, self.bias)
+    def _conv_forward(self, input: Tensor, weight: Tensor, bias: Optional[Tensor]):
+        if self.padding_mode != "zeros":
+            return F.conv3d(
+                F.pad(
+                    input, self._reversed_padding_repeated_twice, mode=self.padding_mode
+                ),
+                weight,
+                bias,
+                self.stride,
+                _triple(0),
+                self.dilation,
+                self.groups,
+            )
+        return F.conv3d(
+            input, weight, bias, self.stride, self.padding, self.dilation, self.groups
+        )
+
+    def forward(self, input: Tensor) -> Tensor:
+        weight = self.get_weight()
+        return self._conv_forward(input, weight, self.bias)
+    
+    def get_weight(self):
+        return _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
 
 
 if __name__ == '__main__':
-    # model = nn.Conv2d(20, 16, kernel_size=3, stride=1, padding=1)
-    model = QConv2d(20, 16, kernel_size=3, stride=1, padding=1)  # 20 and 16 are divisible by 4
-    x = torch.randn(128, 20, 32, 32)
-    output = model(x)
-    print(output.size())
-    # print(f"{model.weight.size() = }")
-    print(f"{model.r_weight.size() = },\n{model.i_weight.size() = },\n{model.j_weight.size() = },\n{model.k_weight.size() = }")
+    print("QConv1d:")
+    rmodel = nn.Conv1d(20, 16, 3, stride=1, padding=1)
+    qmodel = QConv1d(20, 16, 3, stride=1, padding=1)
+    input_ = torch.randn(128, 20, 32)
+    routput = rmodel(input_)
+    qoutput = qmodel(input_)
+    print(f"{rmodel.weight.size() = }")
+    print(f"{qmodel.r_weight.size() = }")
+    print(f"{qmodel.i_weight.size() = }")
+    print(f"{qmodel.j_weight.size() = }")
+    print(f"{qmodel.k_weight.size() = }")
+    print(f"{input_.size() = }\n{routput.size() = }\n{qoutput.size() = }")
+    
+    print("\nQConv2d:")
+    rmodel = nn.Conv2d(20, 16, 3, stride=1, padding=1)
+    qmodel = QConv2d(20, 16, 3, stride=1, padding=1)
+    input_ = torch.randn(128, 20, 32, 32)
+    routput = rmodel(input_)
+    qoutput = qmodel(input_)
+    print(f"{rmodel.weight.size() = }")
+    print(f"{qmodel.r_weight.size() = }")
+    print(f"{qmodel.i_weight.size() = }")
+    print(f"{qmodel.j_weight.size() = }")
+    print(f"{qmodel.k_weight.size() = }")
+    print(f"{input_.size() = }\n{routput.size() = }\n{qoutput.size() = }")
+    
+    print("\nQConv3d:")
+    rmodel = nn.Conv3d(20, 16, 3, stride=1, padding=1)
+    qmodel = QConv3d(20, 16, 3, stride=1, padding=1)
+    input_ = torch.randn(128, 20, 32, 32, 32)
+    routput = rmodel(input_)
+    qoutput = qmodel(input_)
+    print(f"{rmodel.weight.size() = }")
+    print(f"{qmodel.r_weight.size() = }")
+    print(f"{qmodel.i_weight.size() = }")
+    print(f"{qmodel.j_weight.size() = }")
+    print(f"{qmodel.k_weight.size() = }")
+    print(f"{input_.size() = }\n{routput.size() = }\n{qoutput.size() = }")
