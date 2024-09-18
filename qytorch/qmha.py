@@ -10,27 +10,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from quat_base import _construct_matrix
 
-
-def _check_arg_device(x: Optional[torch.Tensor]) -> bool:
-    if x is not None:
-        return x.device.type in ["cpu", "cuda", torch.utils.backend_registration._privateuse1_backend_name]
-    return True
-
-
-def _arg_requires_grad(x: Optional[torch.Tensor]) -> bool:
-    if x is not None:
-        return x.requires_grad
-    return False
-
-
-def _is_make_fx_tracing():
-    if not torch.jit.is_scripting():
-        torch_dispatch_mode_stack = torch.utils._python_dispatch._get_current_dispatch_mode_stack()
-        return any(type(x) == torch.fx.experimental.proxy_tensor.ProxyTorchDispatchMode for x in torch_dispatch_mode_stack)
-    else:
-        return False
-    
-nn.Transformer
+from torch.nn.modules.activation import _check_arg_device, _arg_requires_grad, _is_make_fx_tracing
 
 class QMultiheadAttention(nn.Module):
     __constants__ = ['batch_first']

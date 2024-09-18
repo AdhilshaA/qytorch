@@ -284,7 +284,7 @@ class QConv3d(_QConvNd):
         return _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # testing
     print("QConv1d:")
     rmodel = nn.Conv1d(20, 16, 3, stride=1, padding=1)
     qmodel = QConv1d(20, 16, 3, stride=1, padding=1)
@@ -297,6 +297,7 @@ if __name__ == '__main__':
     print(f"{qmodel.j_weight.size() = }")
     print(f"{qmodel.k_weight.size() = }")
     print(f"{input_.size() = }\n{routput.size() = }\n{qoutput.size() = }")
+    print("routput and qoutput should have same shape")
     
     print("\nQConv2d:")
     rmodel = nn.Conv2d(20, 16, 3, stride=1, padding=1)
@@ -310,6 +311,7 @@ if __name__ == '__main__':
     print(f"{qmodel.j_weight.size() = }")
     print(f"{qmodel.k_weight.size() = }")
     print(f"{input_.size() = }\n{routput.size() = }\n{qoutput.size() = }")
+    print("routput and qoutput should have same shape")
     
     print("\nQConv3d:")
     rmodel = nn.Conv3d(20, 16, 3, stride=1, padding=1)
@@ -323,3 +325,4 @@ if __name__ == '__main__':
     print(f"{qmodel.j_weight.size() = }")
     print(f"{qmodel.k_weight.size() = }")
     print(f"{input_.size() = }\n{routput.size() = }\n{qoutput.size() = }")
+    print("routput and qoutput should have same shape")

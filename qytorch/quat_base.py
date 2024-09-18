@@ -1,9 +1,9 @@
 """
 Quaternion layers:
     - [x] QLinear
-    - [.] QConv1d
-    - [.] QConv2d
-    - [.] QConv3d
+    - [x] QConv1d
+    - [x] QConv2d
+    - [x] QConv3d
     - [ ] QMultiheadAttention
 """
 

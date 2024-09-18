@@ -1,1 +1,4 @@
 token
+*.egg-info
+__pycache__
+.venv

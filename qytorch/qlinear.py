@@ -67,7 +67,8 @@ class QLinear(nn.Module):
     def get_weight(self):
         return _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # testing
+    print("QLinear:")
     rmodel = nn.Linear(20, 16)
     qmodel = QLinear(20, 16)
     input_ = torch.randn(128, 20)
@@ -79,3 +80,4 @@ if __name__ == '__main__':
     print(f"{qmodel.j_weight.size() = }")
     print(f"{qmodel.k_weight.size() = }")
     print(f"{input_.size() = }\n{routput.size() = }\n{qoutput.size() = }")
+    print("routput and qoutput should have same shape")
