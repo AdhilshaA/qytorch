@@ -20,6 +20,7 @@ r"""Quaternion Linear Layer.
         >>> print(output.size())
         torch.Size([128, 16])
     """
+
 class QLinear(nn.Module):  
     """Quaternion Linear Layer.
     
@@ -117,6 +118,8 @@ class QLinear(nn.Module):
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
 
     def get_weight(self):
+        """Constructs a matrix from the given quaternion components. To  to be used in quaternion multiplications (Hamilton product).
+        """
         return _construct_matrix(self.r_weight, self.i_weight, self.j_weight, self.k_weight)
 
 if __name__ == '__main__':  # testing
